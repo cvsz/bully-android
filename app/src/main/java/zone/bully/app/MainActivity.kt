@@ -6,7 +6,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.SafeBrowsingResponse
@@ -23,7 +22,6 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.webkit.WebViewFeature
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -47,7 +45,6 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
         val root = FrameLayout(this)
@@ -100,9 +97,7 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
-                return if (isTrusted(uri)) {
-                    false
-                } else {
+                return if (isTrusted(uri)) false else {
                     openExternal(uri)
                     true
                 }
@@ -153,25 +148,23 @@ class MainActivity : AppCompatActivity() {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
     }
 
-    private fun buildErrorView(): LinearLayout {
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+    private fun buildErrorView(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = android.view.Gravity.CENTER
+        visibility = View.GONE
+        setPadding(48, 48, 48, 48)
+        addView(TextView(context).apply {
+            text = getString(R.string.network_error)
+            textSize = 18f
             gravity = android.view.Gravity.CENTER
-            visibility = View.GONE
-            setPadding(48, 48, 48, 48)
-            addView(TextView(context).apply {
-                text = getString(R.string.network_error)
-                textSize = 18f
-                gravity = android.view.Gravity.CENTER
-            })
-            addView(Button(context).apply {
-                text = getString(R.string.retry)
-                setOnClickListener {
-                    showWeb()
-                    webView.reload()
-                }
-            })
-        }
+        })
+        addView(Button(context).apply {
+            text = getString(R.string.retry)
+            setOnClickListener {
+                showWeb()
+                webView.reload()
+            }
+        })
     }
 
     private fun showError() {
