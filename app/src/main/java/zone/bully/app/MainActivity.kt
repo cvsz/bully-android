@@ -107,7 +107,8 @@ class MainActivity : AppCompatActivity() {
 
         webView.setDownloadListener { url, _, _, _, _ -> openExternal(url.toUri()) }
 
-        @SuppressLint("MissingOnRenderProcessGone") // Callback is implemented below; WebKit lint 1.17.1 misflags this anonymous client.\n        webView.webViewClient = object : WebViewClient() {
+        @SuppressLint("MissingOnRenderProcessGone") // Callback is implemented below; WebKit lint 1.17.1 misflags this anonymous client.
+        webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 return if (isTrusted(uri)) false else {
