@@ -18,6 +18,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -118,6 +119,15 @@ class MainActivity : AppCompatActivity() {
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) showError()
+            }
+
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                // The renderer is already unusable. Remove and destroy this WebView so Android
+                // does not crash the process by continuing to use the dead renderer.
+                (view.parent as? FrameLayout)?.removeView(view)
+                view.destroy()
+                showError()
+                return true
             }
 
             override fun onSafeBrowsingHit(
