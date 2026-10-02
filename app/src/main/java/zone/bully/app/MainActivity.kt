@@ -6,6 +6,11 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.util.UUID
+import kotlin.concurrent.thread
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.SafeBrowsingResponse
@@ -13,6 +18,7 @@ import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
@@ -22,11 +28,18 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
 
 class MainActivity : AppCompatActivity() {
     companion object {
-        private const val HOME_URL = "https://bully.zone/"
+        private const val HOME_URL = "https://bully.zone/register?ref=56222"
         private const val ROOT_HOST = "bully.zone"
+        private const val INSTALL_ENDPOINT = "https://install.bully.zone/v1/install"
+        private const val INSTALL_PREFS = "install_attribution"
+        private const val INSTALL_ID = "install_id"
+        private const val INSTALL_REPORTED = "reported"
     }
 
     private lateinit var webView: WebView
@@ -92,8 +105,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.setDownloadListener { url, _, _, _, _ -> openExternal(Uri.parse(url)) }
+        webView.setDownloadListener { url, _, _, _, _ -> openExternal(url.toUri()) }
 
+        @SuppressLint("MissingOnRenderProcessGone") // Callback is implemented below; WebKit lint 1.17.1 misflags this anonymous client.
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
@@ -104,11 +118,20 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                if (url != null && isTrusted(Uri.parse(url))) showWeb()
+                if (url != null && isTrusted(url.toUri())) showWeb()
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
                 if (request.isForMainFrame) showError()
+            }
+
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                // The renderer is already unusable. Remove and destroy this WebView so Android
+                // does not crash the process by continuing to use the dead renderer.
+                (view.parent as? FrameLayout)?.removeView(view)
+                view.destroy()
+                showError()
+                return true
             }
 
             override fun onSafeBrowsingHit(
@@ -124,7 +147,7 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    errorView.visibility == View.VISIBLE -> showWeb()
+                    errorView.isVisible -> showWeb()
                     webView.canGoBack() -> webView.goBack()
                     else -> {
                         isEnabled = false
@@ -134,7 +157,46 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        reportInstallOnce()
         if (savedInstanceState == null) webView.loadUrl(HOME_URL) else webView.restoreState(savedInstanceState)
+    }
+
+    private fun reportInstallOnce() {
+        val prefs = getSharedPreferences(INSTALL_PREFS, MODE_PRIVATE)
+        if (prefs.getBoolean(INSTALL_REPORTED, false)) return
+        val installId = prefs.getString(INSTALL_ID, null) ?: UUID.randomUUID().toString().also {
+            prefs.edit { putString(INSTALL_ID, it) }
+        }
+
+        thread(name = "install-attribution") {
+            runCatching {
+                val payload = JSONObject()
+                    .put("install_id", installId)
+                    .put("ref", "56222")
+                    .put("package_name", packageName)
+                    .put("version_name", BuildConfig.VERSION_NAME)
+                    .put("version_code", BuildConfig.VERSION_CODE)
+                    .put("platform", "android")
+                    .toString()
+
+                val connection = (URL(INSTALL_ENDPOINT).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    connectTimeout = 5_000
+                    readTimeout = 5_000
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "application/json")
+                }
+                try {
+                    connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                    if (connection.responseCode in 200..299) {
+                        prefs.edit { putBoolean(INSTALL_REPORTED, true) }
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+            }
+        }
     }
 
     private fun isTrusted(uri: Uri): Boolean {
@@ -187,7 +249,6 @@ class MainActivity : AppCompatActivity() {
         fileCallback = null
         webView.stopLoading()
         webView.webChromeClient = null
-        webView.webViewClient = WebViewClient()
         webView.destroy()
         super.onDestroy()
     }
