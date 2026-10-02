@@ -245,7 +245,6 @@ class MainActivity : AppCompatActivity() {
         fileCallback = null
         webView.stopLoading()
         webView.webChromeClient = null
-        webView.webViewClient = WebViewClient()
         webView.destroy()
         super.onDestroy()
     }
