@@ -28,6 +28,9 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import androidx.core.view.isVisible
 
 class MainActivity : AppCompatActivity() {
     companion object {
@@ -102,9 +105,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        webView.setDownloadListener { url, _, _, _, _ -> openExternal(Uri.parse(url)) }
+        webView.setDownloadListener { url, _, _, _, _ -> openExternal(url.toUri()) }
 
-        webView.webViewClient = object : WebViewClient() {
+        @SuppressLint("MissingOnRenderProcessGone") // Callback is implemented below; WebKit lint 1.17.1 misflags this anonymous client.\n        webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
                 return if (isTrusted(uri)) false else {
@@ -114,7 +117,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                if (url != null && isTrusted(Uri.parse(url))) showWeb()
+                if (url != null && isTrusted(url.toUri())) showWeb()
             }
 
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -143,7 +146,7 @@ class MainActivity : AppCompatActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
-                    errorView.visibility == View.VISIBLE -> showWeb()
+                    errorView.isVisible -> showWeb()
                     webView.canGoBack() -> webView.goBack()
                     else -> {
                         isEnabled = false
@@ -161,7 +164,7 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(INSTALL_PREFS, MODE_PRIVATE)
         if (prefs.getBoolean(INSTALL_REPORTED, false)) return
         val installId = prefs.getString(INSTALL_ID, null) ?: UUID.randomUUID().toString().also {
-            prefs.edit().putString(INSTALL_ID, it).apply()
+            prefs.edit { putString(INSTALL_ID, it) }
         }
 
         thread(name = "install-attribution") {
@@ -186,7 +189,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     connection.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
                     if (connection.responseCode in 200..299) {
-                        prefs.edit().putBoolean(INSTALL_REPORTED, true).apply()
+                        prefs.edit { putBoolean(INSTALL_REPORTED, true) }
                     }
                 } finally {
                     connection.disconnect()
