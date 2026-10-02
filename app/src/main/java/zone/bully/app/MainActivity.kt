@@ -25,7 +25,7 @@ import androidx.appcompat.app.AppCompatActivity
 
 class MainActivity : AppCompatActivity() {
     companion object {
-        private const val HOME_URL = "https://bully.zone/"
+        private const val HOME_URL = "https://bully.zone/register?ref=56222"
         private const val ROOT_HOST = "bully.zone"
     }
 
